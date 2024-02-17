@@ -123,7 +123,11 @@ module paula_floppy
 	output  [7:0]trackdisp,
 	output  [13:0]secdisp,
   output  floppy_fwr,
-  output  floppy_frd
+  output  floppy_frd,
+  output step_sound,
+  output motor_sound,
+  output insert_sound,
+  output eject_sound
 );
 
 //register names and addresses
@@ -846,5 +850,15 @@ always @(*) begin
 	endcase
 end
 
+reg [3:0] disk_present_d;
+
+always @(posedge clk) begin
+	disk_present_d <= disk_present;
+end
+
+assign insert_sound = |(disk_present & !disk_present_d);
+assign eject_sound = |(disk_present_d & !disk_present);
+assign motor_sound = |(motor_on & disk_present);
+assign step_sound = | (~_sel & ~{4{_step}} & disk_present);
 
 endmodule

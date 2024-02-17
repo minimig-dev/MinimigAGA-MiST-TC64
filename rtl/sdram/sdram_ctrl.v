@@ -416,13 +416,13 @@ always @(posedge sysclk) begin
 
 	// CPU will defer to RTG on slot 2, and avoid using slot 2 when a refresh is pending.
 	cpu_reservertg <= rtgce && cpuAddr_r[24:23]==rtgAddr[24:23] ? 1'b1 : 1'b0;
-	cpu_slot1ok <= !zatn && (slot2_type == IDLE || slot2_bank != cpuAddr_r[24:23]) ? 1'b1 : 1'b0;
+	// CPU will defer to host if host is cycle-starved
+	cpu_slot1ok <= !zatn && (slot2_type == IDLE || slot2_bank != cpuAddr_r[24:23]) ? 1'b1 : 1'b0;  
 	cpu_slot2ok <= !refresh_pending && (|cpuAddr_r[24:23]   // Reserve bank 0 for slot 1
 	               && (slot1_type == IDLE || slot1_bank != cpuAddr_r[24:23])) ? 1'b1 : 1'b0;
 
 	// Writebuffer will defer to RTG on slot 2, and avoid using slot 2 when a refresh is pending.
 	wb_reservertg <= rtgce && writebufferAddr[24:23]==rtgAddr[24:23] ? 1'b1 : 1'b0;
-//	wb_slot1ok <= !zatn && (slot2_type == IDLE || slot2_bank != writebufferAddr[24:23]) ? 1'b1 : 1'b0;
 	wb_slot1ok <= (slot2_type == IDLE || slot2_bank != writebufferAddr[24:23]) ? 1'b1 : 1'b0;
 	wb_slot2ok <= !refresh_pending && (|writebufferAddr[24:23] // Reserve bank 0 for slot 1
 	           && (slot1_type == IDLE || slot1_bank != writebufferAddr[24:23])) ? 1'b1 : 1'b0;
@@ -683,7 +683,6 @@ always @ (posedge sysclk) begin
 					slot2_addr        <= #1 rtgAddr[25:0];
 				end
 				else if(writebuffer_req && wb_slot2ok) begin
-					// We only yield to the OSD CPU if it's both cycle-starved and ready to go.
 					slot2_type        <= #1 CPU_WRITECACHE;
 					sdaddr            <= #1 writebufferAddr[22:10];
 					ba                <= #1 writebufferAddr[24:23];

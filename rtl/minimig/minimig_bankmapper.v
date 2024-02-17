@@ -14,16 +14,16 @@ module minimig_bankmapper
 	input	kickext,				// Kickstart extended ROM select
 	input	kick1mb,				// 1MB Kickstart 'upper' half
 	input	cart,					// Action Replay memory range select
+	input drivesounds,      // RAM buffer for uploading drive sounds
 //	input	aron,					// Action Replay enable
 	input	ecs,					// ECS chipset enable
 	input	[3:0] memory_config,	// memory configuration
 	output	reg [7:0] bank		// bank select
 );
 
-
 always @(*)
   begin
-    bank[7:4] = { kick , kickext, chip3 | chip2 | chip1 | chip0, kick1mb | slow0 | slow1 | slow2 | cart };
+    bank[7:4] = { kick , kickext, chip3 | chip2 | chip1 | chip0, kick1mb | slow0 | slow1 | slow2 | cart | drivesounds};
     case (memory_config[1:0])
       2'b00 : bank[3:0] = {  1'b0,  1'b0,          1'b0, chip3 | chip2 | chip1 | chip0 }; // 0.5M CHIP
       2'b01 : bank[3:0] = {  1'b0,  1'b0, chip3 | chip1,                 chip2 | chip0 }; // 1.0M CHIP

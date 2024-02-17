@@ -95,6 +95,7 @@ module gary
 	output	sel_toccata,            //select toccata sound card
 	output	sel_gayle,				//select $DExxxx
 	output	sel_autoconfig,		// select $E8xxxx
+	output   sel_drivesounds,     // select $EAxxxx - $EFxxxx
 	input		autoconfig_done,   // 1 if the autoconfig is done
 	input		[4:0] autoconfig_shutup, // autoconfig shutup register, silence card if one
 	input		[7:0] toccata_base_addr //base address for the Toccata sound card
@@ -181,6 +182,8 @@ assign sel_ide = |hdc_ena && cpu_address_in[23:16]==8'b1101_1010 ? 1'b1 : 1'b0;	
 assign sel_gayle = |hdc_ena && cpu_address_in[23:12]==12'b1101_1110_0001 ? 1'b1 : 1'b0;		//GAYLE registers at $DE1000 - $DE1FFF
 
 assign sel_autoconfig = cpu_address_in[23:16]==12'b1110_1000 ? 1'b1 : 1'b0;		//AUTOCONFIG registers at $E80000 - $E8FFFF
+
+assign sel_drivesounds = cpu_address_in[23:19]==12'b1110_1 ? |cpu_address_in[18:17] : 1'b0;		//Drivesound RAM at $EA0000 - $EF0000
 
 assign sel_rtc = (cpu_address_in[23:16]==8'b1101_1100) ? 1'b1 : 1'b0;   //RTC registers at $DC0000 - $DCFFFF
 

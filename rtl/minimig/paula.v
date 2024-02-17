@@ -129,7 +129,11 @@ module paula
 	output  [13:0]secdisp,
   output  floppy_fwr,
   output  floppy_frd,
-  input   filter
+  input   filter,
+  output insert_sound,
+  output eject_sound,
+  output  motor_sound,
+  output  step_sound
 );
 //--------------------------------------------------------------------------------------
 
@@ -306,7 +310,11 @@ paula_floppy pf1
 	.trackdisp(trackdisp),
 	.secdisp(secdisp),
   .floppy_fwr (floppy_fwr),
-  .floppy_frd (floppy_frd)
+  .floppy_frd (floppy_frd),
+  .step_sound(step_sound),
+  .motor_sound(motor_sound),
+  .insert_sound(insert_sound),
+  .eject_sound(eject_sound)
 );
 
 //instantiate audio controller

@@ -61,7 +61,8 @@ module gayle
 	input	hdd_data_wr,
 	input	hdd_data_rd,
 	output hd_fwr,
-	output hd_frd
+	output hd_frd,
+	output hdd_step
 );
 
 localparam VCC = 1'b1;
@@ -231,7 +232,8 @@ ide ide (
 	.hdd_wr(hdd_wr),
 	.hdd_status_wr(hdd_status_wr),
 	.hdd_data_wr(hdd_data_wr),
-	.hdd_data_rd(hdd_data_rd)
+	.hdd_data_rd(hdd_data_rd),
+	.hdd_step(hdd_step)
 );
 
 endmodule

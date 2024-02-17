@@ -65,7 +65,8 @@ module ide
 	input          hdd_wr,
 	input          hdd_status_wr,
 	input          hdd_data_wr,
-	input          hdd_data_rd
+	input          hdd_data_rd,
+	output     reg hdd_step
 );
 
 localparam VCC = 1'b1;
@@ -399,6 +400,22 @@ assign data_oe = (!dev[1] && hdd0_ena[dev[0]]) || (dev[1] && hdd1_ena[dev[0]]);
 assign data_out = sel_fifo && rd ? fifo_data_out  :
                   sel_status ? data_oe ? {status,8'h00} : 16'h00_00 :
                   sel_tfr && rd ? {tfr_out,8'h00} : 16'h00_00;
+
+// Monitor changes to cylinder number for drive sounds
+reg [7:0] cyllow;
+reg [7:0] cyllow_prev;
+always @(posedge clk) begin
+	hdd_step<=1'b0;
+	if (clk_en) begin
+		if (hwr && sel_tfr && address_in == 3'b100) // cyllow register loaded by the host
+			cyllow <= data_in[15:8];
+		if (sel_command) begin
+			if(cyllow_prev!=cyllow)
+				hdd_step <=1'b1;
+			cyllow_prev<=cyllow;
+		end
+	end
+end
 
 //===============================================================================================//
 

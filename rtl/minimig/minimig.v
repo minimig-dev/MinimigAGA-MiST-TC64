@@ -277,7 +277,12 @@ module minimig
   output reg ntsc = NTSC, //PAL/NTSC video mode selection
   input   ext_int2,	// External interrupt for Akiko
   input   ext_int6,	// External interrupt for AHI audio
-  input   ram_64meg
+  input   ram_64meg,
+  output  insert_sound,
+  output  eject_sound,
+  output  motor_sound,
+  output  step_sound,
+  output  hdd_sound
 );
 
 //--------------------------------------------------------------------------------------
@@ -659,7 +664,11 @@ paula PAULA1
 	.secdisp(secdisp),
   .floppy_fwr (floppy_fwr),
   .floppy_frd (floppy_frd),
-  .filter(~|audio_filter_mode ? !_led : audio_filter_mode[1])
+  .filter(~|audio_filter_mode ? !_led : audio_filter_mode[1]),
+  .insert_sound(insert_sound),
+  .eject_sound(eject_sound),
+  .motor_sound(motor_sound),
+  .step_sound(step_sound)
 );
 
 wire	[6:0] userio_memory_config;	//memory configuration
@@ -967,6 +976,7 @@ minimig_bankmapper BMAP1
 	.kickext(sel_kickext),
   .kick1mb(sel_kick1mb),
 	.cart(sel_cart),
+	.drivesounds(sel_drivesounds),
 //	.aron(1'b0),
   .ecs(|chipset_config[4:3]),
 	.memory_config(memory_config[3:0]),
@@ -1030,6 +1040,7 @@ assign _cpu_ipl = int7 ? 3'b000 : _iplx;	//m68k interrupt request
 
 assign cpu_data_in2 = chip48[47:32];
 
+wire sel_drivesounds;
 //instantiate gary
 gary GARY1 
 (
@@ -1076,6 +1087,7 @@ gary GARY1
 	.sel_ide(sel_ide),
 	.sel_gayle(sel_gayle),
 	.sel_autoconfig(sel_autoconfig),
+	.sel_drivesounds(sel_drivesounds),
 	// Auto config IO BASE
 	.autoconfig_done(autoconfig_done),
 	.autoconfig_shutup(autoconfig_shutup),
@@ -1110,7 +1122,8 @@ gayle GAYLE1
 	.hdd_data_wr(hdd_data_wr),
 	.hdd_data_rd(hdd_data_rd),
 	.hd_fwr(hd_fwr),
-	.hd_frd(hd_frd)
+	.hd_frd(hd_frd),
+	.hdd_step(hdd_sound)
 );
 
 reg         cen_44100;
@@ -1174,7 +1187,7 @@ minimig_autoconfig#(.TOCCATA_SND(1'b0)) autoconfig
 	.board_configured(board_configured),
 	.autoconfig_done(autoconfig_done),
 	.toccata_base_addr(toccata_base_addr),
-	.board_shutup(autoconfig_shutdown),
+	.board_shutup(autoconfig_shutup),
 );
 
 //-------------------------------------------------------------------------------------

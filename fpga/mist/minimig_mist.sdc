@@ -99,3 +99,7 @@ set_multicycle_path -from {VideoStream:myvs|outptr[*]} -to {sdram_ctrl:sdram|*} 
 set_multicycle_path -from {VideoStream:myvs|outptr[*]} -to {sdram_ctrl:sdram|*} -hold -end 1
 set_multicycle_path -from {VideoStream:myaudiostream|*} -to {sdram_ctrl:sdram|*} -setup -end 2
 set_multicycle_path -from {VideoStream:myaudiostream|*} -to {sdram_ctrl:sdram|*} -hold -end 1
+
+# Drivesound state machine doesn't follow writes immedately with reads so we isn't critical.  (FIXME - this is ugly)
+set_multicycle_path -from {drivesounds:ds_inst|altsyncram:ds_storage_rtl_0|*porta_we_reg} -to * -setup -end 2
+set_multicycle_path -from {drivesounds:ds_inst|altsyncram:ds_storage_rtl_0|*porta_we_reg} -to * -hold -end 2
