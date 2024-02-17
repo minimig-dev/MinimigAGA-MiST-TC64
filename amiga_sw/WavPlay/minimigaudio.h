@@ -9,7 +9,7 @@
 #define AUDIOACTIVE 1
 #define AUDIOINTACTIVE 2
 
-#define AUDIOBUFFER ((char *)0xb00000)
+#define AUDIOBUFFER ((char *)0xef0000)
 #define AUDIOBUFFERSIZE 32768
 
 
