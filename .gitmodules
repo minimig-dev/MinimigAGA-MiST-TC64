@@ -6,5 +6,5 @@
 	url = https://github.com/robinsonb5/EightThirtyTwo
 [submodule "rtl/fpga-toccata"]
 	path = rtl/fpga-toccata
-	url = https://github.com/robinsonb5-PRs/fpga-toccata
+	url = https://github.com/ranzbak/fpga-toccata
 
