@@ -425,6 +425,35 @@ set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to AUDIO_L
 set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to AUDIO_R
 set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to SPI_DO
 
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_B[7]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_B[6]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_B[5]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_B[4]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_B[3]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_B[2]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_B[1]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_B[0]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_B
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_G[7]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_G[6]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_G[5]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_G[4]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_G[3]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_G[2]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_G[1]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_G[0]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_G
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_HS
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_R[7]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_R[6]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_R[5]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_R[4]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_R[3]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_R[2]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_R[1]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_R[0]
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_R
+set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to VGA_VS
 set_global_assignment -name VERILOG_MACRO "MINIMIG_NO_DIRECT_UPLOAD=1"
 set_global_assignment -name VERILOG_MACRO "MINIMIG_VGA_8BIT=1"
 set_global_assignment -name VERILOG_MACRO "MINIMIG_USE_HDMI=1"

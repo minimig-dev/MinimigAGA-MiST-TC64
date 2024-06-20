@@ -91,7 +91,9 @@ parameter addr_max_bits=26;
 parameter addr_prefix_bits=0;
 parameter addr_prefix=0;
 
-parameter shortcut=0;
+parameter shortcut=0; // 0: Maintain sync with clk7_en.  1: Respond as quickly as possible to new requests.
+
+parameter fast_write=0; // 1: Do 8-cycle writes, taking liberties with SDRAM tWR+tRP
 
 //// parameters ////
 
@@ -279,7 +281,7 @@ cpu_cache_new #(
 	.cpu_adr          ({cpuAddr, 1'b0}),              // cpu address
 	.cpu_bs           ({!cpuU, !cpuL}),               // cpu byte selects
 	.cpu_32bit        (longword_en),                  // cpu 32 bit write
-	.cpu_we           (&cpustate[1:0]),               // cpu write
+	.cpu_we           (cpu_we),                       // cpu write
 	.cpu_ir           (cpu_ir),                       // cpu instruction read
 	.cpu_dr           (cpu_dr),                       // cpu data read
 	.cpu_dat_w        (cpuWR),                        // cpu write data
@@ -305,9 +307,11 @@ assign readcache_fill = (cache_fill_1 && slot1_type == CPU_READCACHE) || (cache_
 
 reg cpu_ir;
 reg cpu_dr;
+reg cpu_we;
 always @(posedge sysclk) begin
 	cpu_ir <= !(|cpustate[1:0]);            // cpu instruction read
 	cpu_dr <= cpustate[1] && !cpustate[0];  // cpu data read
+	cpu_we <= &cpustate[1:0];
 end
 
 //// chip line read ////
@@ -402,13 +406,13 @@ always @ (posedge sysclk) begin
 	case(sdram_state) // LATENCY=3
 		ph0     : sdram_state <= #1 ph1;
 		ph1     : sdram_state <= #1 ph2;
-		ph2     : sdram_state <= #1 ph3;
-		ph3     : begin
+		ph2     : begin
 				if(init_done && shortcut==1 && (!rtgce) && slot1_type==IDLE && slot2_type==IDLE)	// Shortcut back to ph0 if both slots are idle.
-					sdram_state <= #1 ph0;
+					sdram_state <= #1 ph1;
 				else
-					sdram_state <= #1 ph4;
+					sdram_state <= #1 ph3;
 			end
+		ph3     : sdram_state <= #1 ph4;
 		ph4     : sdram_state <= #1 ph5;
 		ph5     : sdram_state <= #1 ph6;
 		ph6     : sdram_state <= #1 ph7;
@@ -543,16 +547,6 @@ always @ (posedge sysclk) begin
 					dqm                 <= #1 slot2_dqm;
 				end
 				
-				// Evaluate refresh counter in ph0 so that the refresh can be actioned the same
-				// round as it's deemed necessary.  The chipset and RTG can still potentially hold
-				// off the refresh for two more rounds, so we start counting again immediately,
-				// instead of waiting for the refresh to be actioned.
-				if(~|refreshcnt) begin
-					refresh_pending     <= #1 1'b1;
-					refreshcnt          <= #1 REFRESHSCHEDULE;
-				end else begin
-					refreshcnt          <= #1 refreshcnt - 9'd1;
-				end
 			end
 
 			ph1 : begin
@@ -664,6 +658,17 @@ always @ (posedge sysclk) begin
 				writebufferWR2_reg  <= #1 writebufferWR2;
 				// slot 2
 				cache_fill_2                <= #1 1'b1;
+				
+				// Evaluate refresh counter in ph2.  The chipset and RTG can still potentially hold
+				// off the refresh for two more rounds, so we start counting again immediately,
+				// instead of waiting for the refresh to be actioned.
+				if(~|refreshcnt) begin
+					refresh_pending     <= #1 1'b1;
+					refreshcnt          <= #1 REFRESHSCHEDULE;
+				end else begin
+					refreshcnt          <= #1 refreshcnt - 9'd1;
+				end
+				
 			end
 
 			ph3 : begin
@@ -684,7 +689,7 @@ always @ (posedge sysclk) begin
 					end
 				end
 
-				if(slot1_write && (slot2_write || slot2_type == IDLE)) begin // Write cycle
+				if(fast_write && slot1_write && (slot2_write || slot2_type == IDLE)) begin // Write cycle
 					sdaddr[12:3]        <= #1 {1'b0, 1'b0, 1'b0, slot1_addr[25], slot1_addr[9:4]}; // no auto-precharge
 					sdaddr[2:0]         <= #1 slot1_addr[3:1];
 					ba                  <= #1 slot1_bank;
@@ -701,7 +706,7 @@ always @ (posedge sysclk) begin
 
 			ph5 : begin
 				cache_fill_2                <= #1 1'b1;
-				if(slot1_write && (slot2_write || slot2_type == IDLE)) begin // Write cycle (2nd word)
+				if(fast_write && slot1_write && (slot2_write || slot2_type == IDLE)) begin // Write cycle (2nd word)
 					sdaddr[12:3]    <= #1 {1'b0, 1'b0, 1'b1, slot1_addr[25], slot1_addr[9:4]}; // auto-precharge
 					sdaddr[2:0]     <= #1 slot1_addr[3:1] + 1'd1;
 					ba              <= #1 slot1_bank;
@@ -833,7 +838,7 @@ always @ (posedge sysclk) begin
 						sdaddr[10] <= ~rtg_extendable;
 					end
 				end
-				if(slot2_write && (slot1_write || slot1_type == IDLE)) begin // Write cycle
+				if(fast_write && slot2_write && (slot1_write || slot1_type == IDLE)) begin // Write cycle
 					sdaddr[12:3]        <= #1 {1'b0, 1'b0, 1'b0, slot2_addr[25], slot2_addr[9:4]}; // Can't auto-precharge, since we need to interrupt the burst
 					sdaddr[2:0]         <= #1 slot2_addr[3:1];
 					sdata_out           <= #1 writebufferWR_reg;
@@ -847,7 +852,7 @@ always @ (posedge sysclk) begin
 
 			ph13 : begin
 				cache_fill_1          <= #1 1'b1;
-				if(slot2_write && (slot1_write || slot1_type == IDLE)) begin // Write cycle (2nd word)
+				if(fast_write && slot2_write && (slot1_write || slot1_type == IDLE)) begin // Write cycle (2nd word)
 					sdaddr[12:3]        <= #1 {1'b0, 1'b0, 1'b1, slot2_addr[25], slot2_addr[9:4]}; // auto-precharge
 					sdaddr[2:0]         <= #1 slot2_addr[3:1] + 1'd1;
 					sdata_out           <= #1 writebufferWR2_reg;

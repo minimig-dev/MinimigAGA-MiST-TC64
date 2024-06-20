@@ -507,7 +507,7 @@ assign         tg68_cout = sel_2ndram? fastram_cout : chipram_cout;
 wire [ 16-1:0] chipram_cout;
 wire           chipram_ready;
 
-sdram_ctrl #(.addr_prefix_bits(1), .addr_prefix(0)) sdram (
+sdram_ctrl #(.addr_prefix_bits(1), .addr_prefix(0), .fast_write(1)) sdram (
   .sysclk       (clk_114          ),
   .reset_in     (sdctl_rst        ),
   .cache_rst    (tg68_rst         ),
@@ -575,7 +575,7 @@ sdram_ctrl #(.addr_prefix_bits(1), .addr_prefix(0)) sdram (
 wire [ 16-1:0] fastram_cout;
 wire           fastram_ready;
 
-sdram_ctrl #(.shortcut(1'b1), .addr_prefix_bits(1), .addr_prefix(1) ) sdram2 (
+sdram_ctrl #(.shortcut(1'b1), .addr_prefix_bits(1), .addr_prefix(1), .fast_write(1) ) sdram2 (
   .sysclk       (clk_114          ),
   .reset_in     (sdctl_rst        ),
   .cache_rst    (tg68_rst         ),
@@ -879,7 +879,7 @@ always @(posedge clk_114) begin
 	
 	// Increment the fetch clock, reset during blank.
 	if(rtg_blank || rtg_pixel) begin
-		rtg_pixelctr<=3'b0;
+		rtg_pixelctr<=4'b0;
 		rtg_clut_in_sel<=1'b0;
 	end else begin
 		rtg_pixelctr<=rtg_pixelctr+1'd1;

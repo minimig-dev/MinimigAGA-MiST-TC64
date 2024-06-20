@@ -436,8 +436,6 @@ PROCESS (clk) BEGIN
   END IF;
 END PROCESS;
 
-cache_inhibit <= '1' when sel_kickram= '1' and aga = '1' and throttle_sel /= "00" else '0';
-
 host_req<=host_req_r;
 myakiko : entity work.akiko
 generic map
@@ -506,11 +504,21 @@ buslogic : block
 	SIGNAL sync_state       : sync_states;
 	signal sel_chip_d       : std_logic; 
 	signal fast_rd_d        : std_logic;
+	signal clkena_pre		: std_logic;
 begin
 
-	clkena <= '1' WHEN slower(0)='0' and
+	process(clk) begin
+		if rising_edge(clk) then
+			clkena_pre <= '0';
+			if clkena='0' and ((slower(2)='0' and cpu_internal='1') or (slower(1)='0' and (sel_undecoded_d='1' or akiko_ack='1'))) then
+				clkena_pre <= '1';
+			end if;
+		end if;
+	end process;
+
+	clkena <= '1' WHEN clkena_pre='1' or (slower(0)='0' and
 					   ((clkena_in='1' and ((ena7RDreg='1' AND clkena_e='1') OR (ena7WRreg='1' AND clkena_f='1') or fast_rd='1')) OR
-					   cpu_internal='1' or (ramready='1' and block_turbo='0') OR sel_undecoded_d='1' OR akiko_ack='1')
+					   (ramready='1' and block_turbo='0')))
 				  ELSE '0';
 
 	-- AMR - attempt to imitate A1200 speed more closely on chipram fetches:
@@ -540,6 +548,9 @@ begin
 			END IF;
 			sel_chip_d  <= sel_chip;
 			block_turbo <= aga and sel_chip_d and throttle_sel(0) and (cpu_read or (cpu_fetch and cpu_disablecache));
+
+			cache_inhibit <= sel_kickram and aga and (throttle_sel(1) or throttle_sel(0));
+
 		END IF;
 	END PROCESS;
 
