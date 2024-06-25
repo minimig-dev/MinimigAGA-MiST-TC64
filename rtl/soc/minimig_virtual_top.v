@@ -181,6 +181,7 @@ wire           tg68_cuds;
 wire [  4-1:0] tg68_CACR_out;
 wire [ 32-1:0] tg68_VBR_out;
 wire           tg68_ovr;
+wire           tg68_fast_rd;
 
 // minimig
 wire           led;
@@ -376,6 +377,8 @@ wire [15:0] rtg_dat;
 wire rtg_ramreq;
 wire [15:0] rtg_fromram;
 wire rtg_fill;
+wire rtg_ramack;
+wire rtg_rampri;
 
 // Replicate the CPU's address mangling.
 wire [25:0] rtg_addr_mangled;
@@ -392,6 +395,8 @@ VideoStream myvs
 	// SDRAM interface
 	.a(rtg_addr),
 	.req(rtg_ramreq),
+	.ack(rtg_ramack),
+	.pri(rtg_rampri),
 	.d(rtg_fromram),
 	.fill(rtg_fill & havertg),
 	// Display interface
@@ -441,6 +446,8 @@ wire [24:0] aud_addr;
 wire [15:0] aud_sample;
 
 wire aud_ramreq;
+wire aud_ramack;
+wire aud_rampri;
 wire [15:0] aud_fromram;
 wire aud_fill;
 wire aud_ena_host;
@@ -487,6 +494,8 @@ VideoStream myaudiostream
 	// SDRAM interface
 	.a(aud_addr),
 	.req(aud_ramreq),
+	.ack(aud_ramack),
+	.pri(aud_rampri),
 	.d(aud_fromram),
 	.fill(aud_fill & haveaudio),
 	// Display interface
@@ -538,6 +547,7 @@ TG68K #(.havertg(havertg ? "true" : "false"),
   .data_read2   (tg68_dat_in2     ),
   .data_write   (tg68_dat_out     ),
   .data_write2  (tg68_dat_out2    ),
+  .fast_rd      (tg68_fast_rd     ),
   .as           (tg68_as          ),
   .uds          (tg68_uds         ),
   .lds          (tg68_lds         ),
@@ -664,11 +674,14 @@ sdram_ctrl sdram (
   .rtgAddr      (rtg_addr_mangled ),
   .rtgce        (rtg_ramreq       ),
   .rtgfill      (rtg_fill         ),
+  .rtgack       (rtg_ramack       ),
+  .rtgpri       (rtg_rampri       ),
   .rtgRd        (rtg_fromram      ),
 
   .audAddr      (aud_ramaddr      ),
   .audce        (aud_ramreq       ),
   .audfill      (aud_fill         ),
+  .audack       (aud_ramack       ),
   .audRd        (aud_fromram      ),
 
   .reset_out    (reset_out        ),
@@ -743,6 +756,7 @@ minimig minimig
 	.cpu_data2    (tg68_dat_in2     ), // M68K data bus 2nd word
 	.cpudata_in   (tg68_dat_out     ), // M68K data in
 	._cpu_ipl     (tg68_IPL         ), // M68K interrupt request
+	.fast_rd      (tg68_fast_rd     ), // Fast read for Gayle IDE cycles
 	._cpu_as      (tg68_as          ), // M68K address strobe
 	._cpu_uds     (tg68_uds         ), // M68K upper data strobe
 	._cpu_lds     (tg68_lds         ), // M68K lower data strobe
