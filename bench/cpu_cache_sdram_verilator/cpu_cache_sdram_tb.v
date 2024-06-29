@@ -102,7 +102,7 @@ wire          audfill;
 wire          audack;
 wire   [15:0] audRd;
 
-wire [24-1:0] bridge_adr;
+wire [26-1:0] bridge_adr;
 wire          bridge_cs;
 wire          bridge_we;
 wire [32-1:0] bridge_dat_w;
@@ -144,8 +144,8 @@ reg           tg68_rw=0;
 //// toplevel logic ////
 assign cctrl = 3'b111;
 
-assign bridge_cs = 1'b0;
-assign bridge_adr = 24'd0;
+assign bridge_cs = 1'b1;
+assign bridge_adr = 26'h680000;
 assign bridge_we = 1'b0;
 assign bridge_dat_w = 32'd0;
 
@@ -197,7 +197,7 @@ sdram_ctrl #(
   .sdata        (DRAM_DQ          ),
   // host
   .hostWR       (bridge_dat_w     ),
-  .hostAddr     (bridge_adr       ),
+  .hostAddr     (bridge_adr[25:2] ),
   .hostce       (bridge_cs        ),
   .hostwe       (bridge_we        ),
   .hostbytesel  (bridge_bytesel   ),

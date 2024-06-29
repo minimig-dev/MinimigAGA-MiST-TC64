@@ -432,6 +432,29 @@ TG68K tg68k (
 
 assign tg68_host_ack=tg68_host_req; // Prevent lockups on reads to not-yet-implemented Akiko registers.
 
+reg [18:0] host_addr_low;
+reg [25:0] host_addr_high = 25'h680000;
+wire [25:0] host_addr;
+wire [15:0] host_rd;
+reg [31:0] host_wr;
+reg host_req;
+wire host_ack;
+reg host_we;
+reg [1:0] host_bs;
+
+assign host_addr = {host_addr_high[25:19],host_addr_low[18:0]};
+
+always @(posedge clk_114) begin
+	if(host_ack && host_req) begin
+		host_addr_low<=0; // host_addr_low+4;
+		host_wr<=host_wr+{host_rd,host_rd};
+	end
+	host_req <= ~host_ack;
+	host_we <= 1'b0; // host_addr_low[8];
+	host_bs=4'b1111;
+end
+
+
 `ifndef MINIMIG_DUAL_SDRAM
 sdram_ctrl sdram (
   .sysclk       (clk_114          ),
@@ -450,8 +473,12 @@ sdram_ctrl sdram (
   .sd_ras       (SDRAM_nRAS       ),
   .sd_cas       (SDRAM_nCAS       ),
   // Control CPU (not used in MiST)
-  .hostce       (1'b0             ),
-  .hostwe       (1'b0             ),
+  .hostce       (host_req         ),
+  .hostwe       (host_we          ),
+  .hostRD       (host_rd          ),
+  .hostWR       (host_wr          ),
+  .hostena      (host_ack         ),
+  .hostAddr     (host_addr[25:2]  ),
   // Fast RAM
   .cpuena       (tg68_cpuena      ),
   .cpuRD        (tg68_cout        ),
@@ -489,8 +516,6 @@ sdram_ctrl sdram (
   .audRd        (aud_fromram      ),
   // Misc signals
   .reset_out    (reset_out        ),
-  .hostRD       (                 ),
-  .hostena      (                 ),
   .enaWRreg     (tg68_ena28       ),
   .ena7RDreg    (tg68_ena7RD      ),
   .ena7WRreg    (tg68_ena7WR      )
@@ -513,7 +538,7 @@ assign         tg68_cout = sel_2ndram? fastram_cout : chipram_cout;
 wire [ 16-1:0] chipram_cout;
 wire           chipram_ready;
 
-sdram_ctrl #(.addr_prefix_bits(1), .addr_prefix(0), .fast_write(1)) sdram (
+sdram_ctrl #(.addr_prefix_bits(1), .addr_prefix(0), .fast_write(0)) sdram (
   .sysclk       (clk_114          ),
   .reset_in     (sdctl_rst        ),
   .cache_rst    (tg68_rst         ),
@@ -530,8 +555,12 @@ sdram_ctrl #(.addr_prefix_bits(1), .addr_prefix(0), .fast_write(1)) sdram (
   .sd_ras       (SDRAM_nRAS       ),
   .sd_cas       (SDRAM_nCAS       ),
   // Control CPU (not used in MiST)
-  .hostce       (1'b0             ),
-  .hostwe       (1'b0             ),
+  .hostce       (host_req          ),
+  .hostwe       (host_we          ),
+  .hostRD       (host_rd          ),
+  .hostWR       (host_wr          ),
+  .hostena      (host_ack         ),
+  .hostAddr     (host_addr        ),
   // Fast RAM
   .cpuena       (chipram_ready    ),
   .cpuRD        (chipram_cout     ),
@@ -569,8 +598,6 @@ sdram_ctrl #(.addr_prefix_bits(1), .addr_prefix(0), .fast_write(1)) sdram (
   .audRd        (aud_fromram      ),
   // Misc signals
   .reset_out    (reset_out        ),
-  .hostRD       (                 ),
-  .hostena      (                 ),
   .enaWRreg     (tg68_ena28       ),
   .ena7RDreg    (tg68_ena7RD      ),
   .ena7WRreg    (tg68_ena7WR      )
@@ -581,7 +608,7 @@ sdram_ctrl #(.addr_prefix_bits(1), .addr_prefix(0), .fast_write(1)) sdram (
 wire [ 16-1:0] fastram_cout;
 wire           fastram_ready;
 
-sdram_ctrl #(.shortcut(1'b1), .addr_prefix_bits(1), .addr_prefix(1), .fast_write(1) ) sdram2 (
+sdram_ctrl #(.shortcut(1'b1), .addr_prefix_bits(1), .addr_prefix(1), .fast_write(0) ) sdram2 (
   .sysclk       (clk_114          ),
   .reset_in     (sdctl_rst        ),
   .cache_rst    (tg68_rst         ),

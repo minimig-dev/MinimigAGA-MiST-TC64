@@ -721,7 +721,7 @@ always @ (posedge sysclk) begin
 					slot1_type          <= #1 IDLE;
 				end
 				// Don't block slot 2 with refresh on slot 1
-				if(slot1_type == REFRESH) slot1_type <= #1 IDLE;
+//				if(slot1_type == REFRESH) slot1_type <= #1 IDLE;
 			end
 
 			ph6 : begin

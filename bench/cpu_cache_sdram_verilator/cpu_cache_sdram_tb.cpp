@@ -210,6 +210,7 @@ char long_write_test(int adr) {
 }
 
 char random_test(int iterations) {
+	int base=0x200000;
 	int counter;
 	int okcounter=0;
 	char ok = 1;
@@ -219,7 +220,7 @@ char random_test(int iterations) {
 	{
 		int a = rand() & 0xfffffc;
 		addresses.push_back(a);
-		cpuWrite(a,a & 0xffff);
+		cpuWrite(base+a,a & 0xffff);
 	}
 
 	std::cout << "memory read back after random fill" << std::endl;
@@ -227,7 +228,7 @@ char random_test(int iterations) {
 	{
 		int a=*it;
 		int d=a & 0xffff;
-		int data = cpuRead(a, counter>5 ? 1 : 0);
+		int data = cpuRead(base+a, counter>5 ? 1 : 0);
 		counter=(counter+1)%9;
 		if ((*it & 0xffff) != data) {
 			std::cout << "error: " << okcounter << " good reads, then " << std::setw(8) << std::setfill('0') << std::hex << a << ": " << data << ", expected " << d << std::dec << std::endl;
@@ -241,6 +242,7 @@ char random_test(int iterations) {
 }
 
 char consecutive_test(int iterations) {
+	int base=0x200000;
 	int counter;
 	int okcounter=0;
 	char ok = 1;
@@ -252,7 +254,7 @@ char consecutive_test(int iterations) {
 		for (int i=0; i<32; i++)
 		{
 			addresses.push_back(a+i*2);
-			cpuWrite(a+i*2,(a+i*2) & 0xffff);
+			cpuWrite(base+a+i*2,(a+i*2) & 0xffff);
 		}
 	}
 
@@ -261,7 +263,7 @@ char consecutive_test(int iterations) {
 	{
 		int a=*it;
 		int d=a & 0xffff;
-		int data = cpuRead(a, counter>5 ? 1 : 0);
+		int data = cpuRead(base+a, counter>5 ? 1 : 0);
 		counter=(counter+1)%9;
 		if ((*it & 0xffff) != data) {
 			std::cout << "error: " << okcounter << " good reads, then " << std::setw(8) << std::setfill('0') << std::hex << a << ": " << data << ", expected " << d << std::dec << std::endl;
