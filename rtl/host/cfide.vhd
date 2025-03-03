@@ -33,7 +33,8 @@ entity cfide is
 		havespirtc : in boolean := false;
 		haveiec : in boolean := false;
 		havereconfig : in boolean := false;
-		havecart : in boolean := false
+		havecart : in boolean := false;
+		haveclockport : in boolean := false
 	);
    port ( 
 		sysclk	: in std_logic;
@@ -66,6 +67,7 @@ entity cfide is
 		vbl_int	: in std_logic;
 		interrupt	: out std_logic;
 		c64_keys	: in std_logic_vector(63 downto 0) :=X"FFFFFFFFFFFFFFFF";
+		c64_present : in std_logic := '0';
 		amiga_key	: out std_logic_vector(7 downto 0);
 		amiga_key_stb	: out std_logic;
 		
@@ -142,7 +144,7 @@ signal reconfigpresent : std_logic;
 signal spirtcpresent : std_logic;
 signal iecpresent : std_logic;
 signal cartpresent : std_logic;
-
+signal clockportpresent : std_logic;
 begin
 
 -- Peripheral registers are only 16-bits wide.
@@ -158,8 +160,10 @@ spirtcpresent <= '1' when havespirtc=true else '0';
 iecpresent <= '1' when haveiec=true else '0';
 reconfigpresent <= '1' when havereconfig=true else '0';
 cartpresent <= '1' when havecart=true else '0';
+clockportpresent <= '1' when haveclockport=true else '0';
 
-platformdata <=  X"00" & "00" & cartpresent & iecpresent & reconfigpresent & spirtcpresent & "1" & menu_button;
+platformdata <=  X"00" & cartpresent & c64_present & clockportpresent & iecpresent & reconfigpresent & spirtcpresent & "1" & menu_button;
+
 IOdata <= sd_in;
 
 process(clk_28)

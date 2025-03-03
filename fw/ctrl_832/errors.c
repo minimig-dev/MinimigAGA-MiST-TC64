@@ -15,6 +15,7 @@ void ClearError(int category)
 		a=0;
 		b=ERROR_MAX;
 		ErrorMask=0;
+		ErrorFatal=0;
 	}
 	for(i=a;i<=b;++i)
 	{
@@ -48,7 +49,8 @@ char *ErrorMessages[ERROR_MAX+1]=
 	"Filesystem",
 	"Kickstart ROM",
 	"Floppy emulation",
-	"Harddrive emulation"
+	"Harddrive emulation",
+	"General Error"
 };
 
 

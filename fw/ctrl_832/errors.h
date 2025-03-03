@@ -6,8 +6,9 @@
 #define ERROR_ROM 2
 #define ERROR_FDD 3
 #define ERROR_HDD 4
-#define ERROR_MAX 4
-#define ERROR_ALL 5
+#define ERROR_GENERAL 5
+#define ERROR_MAX 5
+#define ERROR_ALL 6
 
 void FatalError(int errortype,const char *msg,int y,int z);
 void SetError(int errortype,const char *msg,int y,int z);

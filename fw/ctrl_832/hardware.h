@@ -77,7 +77,9 @@
 #define PLATFORM_SPIRTC 2
 #define PLATFORM_RECONFIG 3
 #define PLATFORM_IECSERIAL 4
-#define PLATFORM_CART 5
+#define PLATFORM_CLOCKPORT 5
+#define PLATFORM_C64CARTRIDGE 6
+#define PLATFORM_HRTMONCART 7
 
 // On write:
 //   Bit 0 -> Scandoubler enable

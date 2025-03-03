@@ -114,16 +114,12 @@ void inthandler()
 }
 
 
-int ColdBoot()
-{
+int Init() {
 	int result=0;
 	/* Reset the chipset briefly to cancel AGA display modes, then Put the CPU in reset while we initialise */
 	OsdDoReset(SPI_RST_USR | SPI_RST_CPU | SPI_CPU_HLT,SPI_RST_CPU | SPI_CPU_HLT);
 
 	DisableInterrupts();
-
-	ClearError(ERROR_ALL);
-	ErrorFatal=0;
 
     if (MMC_Init())
 	{
@@ -137,99 +133,106 @@ int ColdBoot()
 			SetConfigurationFilename(0); // Use default config
 		    LoadConfiguration(0);	// Use slot-based config filename
 			ApplyConfiguration(0,0);  // Setup screenmodes, etc before loading KickStart.
-
-			fpga_init();	// Display splashscreen
-
-			key = OsdGetCtrl();
-			sprintf(s,"Got key: %x\n",key);
-			BootPrint(s);
-			if ((key == KEY_F1) || (key == KEY_F3) || (key == KEY_F5))
-			{
-				override=1;
-				config.chipset |= CONFIG_NTSC; // force NTSC mode if F1 or F3 pressed
-			}
-
-			if ((key == KEY_F2) || (key == KEY_F4) || (key == KEY_F6))
-			{
-				override=1;
-				config.chipset &= ~CONFIG_NTSC; // force PAL mode if F2 or F4 pressed
-			}
-
-			// FIXME - new interface for scandoubler?
-			if ((key == KEY_F3) || (key == KEY_F4))
-			{
-				override=1;
-				config.misc &= ~(1<<(PLATFORM_SCANDOUBLER));	// High byte of platform register
-			}
-
-			if ((key == KEY_F1) || (key == KEY_F2))
-			{
-				override=1;
-				config.misc |= 1<<(PLATFORM_SCANDOUBLER);  // High byte of platform register
-			}
-
-			if ((key == KEY_F5) || (key == KEY_F6))
-			{
-				override=1;
-				config.misc |= 1<<(PLATFORM_INVERTSYNC);  // High byte of platform register
-			}
-
-			if(override)
-			{
-				BootPrintEx("Overriding screenmode.");
-				ApplyConfiguration(0,0);
-			}
-
-			drivesounds_init("DRIVESNDBIN");
-			ClearError(ERROR_FILESYSTEM); /* Don't report a missing drivesnd.bin */			
-
-			BootPrintEx("Loading kickstart ROM...");
-			result=ApplyConfiguration(1,1);
-
-			OsdDoReset(SPI_RST_USR | SPI_RST_CPU,0);
-
-			SetIntHandler(inthandler);
-			EnableInterrupts();
-
-			audio_clear();
-			if(drivesounds_loaded())
-				drivesounds_enable(config.drivesounds);
-
+			result=1;
 		}
 	}
 	return(result);
 }
 
+void ColdBoot() {
+	int result=0;
+	int key;
+	int override;
+
+	fpga_init();	// Display splashscreen
+
+	key = OsdGetCtrl();
+	sprintf(s,"Got key: %x\n",key);
+	BootPrint(s);
+	if ((key == KEY_F1) || (key == KEY_F3) || (key == KEY_F5))
+	{
+		override=1;
+		config.chipset |= CONFIG_NTSC; // force NTSC mode if F1 or F3 pressed
+	}
+
+	if ((key == KEY_F2) || (key == KEY_F4) || (key == KEY_F6))
+	{
+		override=1;
+		config.chipset &= ~CONFIG_NTSC; // force PAL mode if F2 or F4 pressed
+	}
+
+	// FIXME - new interface for scandoubler?
+	if ((key == KEY_F3) || (key == KEY_F4))
+	{
+		override=1;
+		config.misc &= ~(1<<(PLATFORM_SCANDOUBLER));	// High byte of platform register
+	}
+
+	if ((key == KEY_F1) || (key == KEY_F2))
+	{
+		override=1;
+		config.misc |= 1<<(PLATFORM_SCANDOUBLER);  // High byte of platform register
+	}
+
+	if ((key == KEY_F5) || (key == KEY_F6))
+	{
+		override=1;
+		config.misc |= 1<<(PLATFORM_INVERTSYNC);  // High byte of platform register
+	}
+
+	if(override)
+	{
+		BootPrintEx("Overriding screenmode.");
+		ApplyConfiguration(0,0);
+	}
+
+	drivesounds_init("DRIVESNDBIN");
+	ClearError(ERROR_FILESYSTEM); /* Don't report a missing drivesnd.bin */			
+
+	BootPrintEx("Loading kickstart ROM...");
+	result=ApplyConfiguration(1,1);
+
+	OsdDoReset(SPI_RST_USR | SPI_RST_CPU,0);
+
+	SetIntHandler(inthandler);
+	EnableInterrupts();
+
+	audio_clear();
+	if(drivesounds_loaded())
+		drivesounds_enable(config.drivesounds);
+}
+
 struct cdimage cd;
 
 void setstack();
-#ifdef __GNUC__
-void c_entry(void)
-#else
-__geta4 int main(void)
-#endif
-{
+
+int main(void) {
 	int c=0;
-	int rtc;
+	int rtc=PLATFORM & (1<<PLATFORM_SPIRTC);
+	int clockport=PLATFORM & (1<<PLATFORM_CLOCKPORT);
+	int cartridge=PLATFORM & (1<<PLATFORM_C64CARTRIDGE);
 	setstack();
 	debugmsg[0]=0;
 	debugmsg2[0]=0;
 
+	ClearError(ERROR_ALL);
+
+	if(!Init())
+		FatalError(ERROR_SDCARD,"SD initialisation failed",0,0);
+	
+	if(clockport && cartridge)
+		FatalError(ERROR_GENERAL,"C64: use non-clockport core",0,0);
+
+	if(ErrorFatal) {
+		ShowError();		
+		HandleUI();
+		while(1)
+			;	
+	}
+
     DISKLED_ON;
 
-	if(PLATFORM & (1<<PLATFORM_SPIRTC))
-	{
-		printf("Platform has SPI RTC support\n");
-		rtc=1;
-	}
-	else
-	{
-		printf("Platform lacks SPI RTC support\n");
-		rtc=0;
-	}
-
-	if(!ColdBoot())
-		BootPrintEx("ROM loading failed");
+	ColdBoot()
 
 //	cd_setcuefile(&cd,"EXODUS_THELASTWAR.CUE");
 //	cd_playaudio(&cd,4);
