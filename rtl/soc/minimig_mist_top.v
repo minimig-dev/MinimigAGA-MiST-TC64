@@ -29,6 +29,12 @@ module minimig_mist_top (
   output wire           MIDI_OUT,
   input wire            MIDI_IN,
 `endif
+`ifdef MINIMIG_SIDI128_EXPANSION
+  input                 UART_CTS,
+  output                UART_RTS,
+  inout                 EXP7,
+  inout                 MOTOR_CTRL,
+`endif
   // VGA
   output reg            VGA_HS,     // VGA H_SYNC
   output reg            VGA_VS,     // VGA V_SYNC
@@ -119,6 +125,11 @@ wire           SPI_SS4 = 1;
 localparam VGA_WIDTH = 8;
 `else
 localparam VGA_WIDTH = 6;
+`endif
+
+`ifdef MINIMIG_SIDI128_EXPANSION
+assign EXP7 = 1'bZ;
+assign MOTOR_CTRL = 1'bZ;
 `endif
 
 // clock
@@ -815,8 +826,13 @@ minimig minimig (
   .midi_tx      (midi_out         ),  // RS232 send
   .rxd          (uart_in          ),  // RS232 receive
   .txd          (uart_out         ),  // RS232 send
+`ifdef MINIMIG_SIDI128_EXPANSION
+  .cts          (UART_CTS         ),  // RS232 clear to send
+  .rts          (UART_RTS         ),  // RS232 request to send
+`else
   .cts          (1'b0             ),  // RS232 clear to send
   .rts          (                 ),  // RS232 request to send
+`endif
   //I/O
   ._joy1        (~joya            ),  // joystick 1 [fire7:fire,up,down,left,right] (default mouse port)
   ._joy2        (~joyb            ),  // joystick 2 [fire7:fire,up,down,left,right] (default joystick port)
