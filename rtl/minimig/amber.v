@@ -52,7 +52,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
-module amber
+module amber #(parameter FRAMING_BITS=11)
 (
   input  wire           clk,            // 28MHz clock
   // config
@@ -114,6 +114,7 @@ always @ (posedge clk) begin
   vse           <= #1 _vsync_in & ~_vsync_in_del;
 end
 
+
 // Interlace long frame detection
 // reg long_frame;
 
@@ -131,7 +132,7 @@ reg  [  8-1:0] b_in_d=0;                // pixel data delayed by 70ns for horizo
 wire [  9-1:0] hi_r;                    // horizontal interpolation output
 wire [  9-1:0] hi_g;                    // horizontal interpolation output
 wire [  9-1:0] hi_b;                    // horizontal interpolation output
-reg  [ 11-1:0] sd_lbuf_wr=0;            // line buffer write pointer
+reg  [ FRAMING_BITS-1:0] sd_lbuf_wr=0;            // line buffer write pointer
 
 // horizontal interpolation enable
 // AMR - since the scandoubler only has hires resolution, force the filter to on
@@ -144,6 +145,190 @@ always @ (posedge clk) begin
   hi_en <= #1 1'b0;
 `endif
 end
+
+//// Horizontal scaling / interpolation ////
+
+`ifdef MINIMIG_ASPECT_CORRECTION
+
+// If we're doing aspect correction we need to generate sync and blank signals using counters rather than the buffer,
+// since we won't be replaying the buffer at exactly double speed.
+reg [FRAMING_BITS-1:0] hb_stop;
+reg [FRAMING_BITS-1:0] hs_stop;
+reg [FRAMING_BITS-1:0] hb_start;
+reg [FRAMING_BITS-1:0] hs_start=0;
+reg hb_del;
+
+reg hb_gen;
+reg hs_gen;
+reg invb;
+
+always @(posedge clk) begin
+	hb_del <= blank_in;
+	if (_hsync_in && !_hsync_in_del) begin
+		if(invb)
+			hb_stop<=-1;
+		invb<=1'b1;
+		hs_stop <= sd_lbuf_wr;
+	end
+	if(blank_in && !hb_del)
+		hb_start <= sd_lbuf_wr;
+	if(!blank_in && hb_del) begin
+		hb_stop <= sd_lbuf_wr;
+		invb<=1'b0;
+	end
+end
+
+always @(posedge clk) begin
+	if(sd_lbuf_rd_reset)
+		hs_gen<=1'b0;
+	if(sd_lbuf_rd=={1'b0,hs_stop[FRAMING_BITS-1:1]})
+		hs_gen<=1'b1;
+	if(sd_lbuf_rd=={1'b0,hb_start[FRAMING_BITS-1:1]})
+		hb_gen<=1'b1;		
+	if(sd_lbuf_rd=={1'b0,hb_stop[FRAMING_BITS-1:1]})
+		hb_gen<=1'b0;
+end
+
+// When the output is scaled, the consume rate will be different from the fill rate,
+// so we need to use different buffer regions. Maintain MSB for input and output.
+
+reg sd_wr_msb;
+reg sd_rd_msb;
+
+always @(posedge clk) begin
+	if(hss) begin
+		sd_rd_msb <= sd_wr_msb;
+		sd_wr_msb <= ~ sd_wr_msb;
+	end
+end
+
+// Deal with horizontal filtering to improve the image quality.
+// Rather than interpolate at the output, we integrate over multiple pixels before
+// writing to the scandoubler buffer.
+
+localparam hi_fracwidth=8; // Must be at least 8. No real advantage to increasing this.
+
+wire [FRAMING_BITS-1:0] hi_whole; // Index into pixel buffer
+wire [hi_fracwidth-1:0] hi_fraction; // Blend factor
+wire [hi_fracwidth:0] hi_fraction_inv; // Blend factor
+wire hi_step; // Move onto the next pixel
+
+reg [FRAMING_BITS-1:0] centre_offset;
+reg [ FRAMING_BITS-1:0] sd_wrptr;            // line buffer write pointer
+
+reg hb_gen_d;
+reg newfrac;
+
+wire hfilter_en = |hires ? hr_filter[0] : lr_filter[0];
+always @(posedge clk) begin
+	centre_offset<= htotal[8:2]; 
+	hb_gen_d <= hb_gen;
+
+	newfrac<=1'b0;
+	if(hb_gen && !hb_gen_d)
+		newfrac <= 1'b1;		// Update the scale factor on the rising edge of HBlank	
+end
+
+
+// Apply OSD early so it can be scaled along with the Amiga video
+
+wire [8:0] red_early_osd = osd_blank ? (osd_pixel ? {OSD_R,1'b0} : {2'b00, red_in[7:1]}) : {red_in,1'b0};
+wire [8:0] green_early_osd = osd_blank ? (osd_pixel ? {OSD_G,1'b0} : {2'b00, green_in[7:1]}) : {green_in,1'b0};
+wire [8:0] blue_early_osd = osd_blank ? (osd_pixel ? {OSD_B,1'b0} : {2'b10, blue_in[7:1]}) : {blue_in,1'b0};
+
+wire osd_pixel_masked = hfilter_en ? 1'b0 : osd_pixel;
+wire osd_blank_masked = hfilter_en ? 1'b0 : osd_blank;
+
+// Blend multiple pixes, applying appropriate weights to the first and last pixel in a span. 
+
+// We're mapping from 16:9 to 4:3, aka 16:9 to 12:9
+// The scale factor is thus 16/12, or 4/3, doubled to 8/3
+// because scandoubled lines are consumed at twice the rate they're recorded.
+
+frac_interp #(.bitwidth(FRAMING_BITS),.fracwidth(hi_fracwidth)) interp_core_h (
+	.clk(clk),
+	.reset_n(1'b1),
+	.num('h8),
+	.den('h3),
+	.limit(-1), // No limit
+	.newfraction(hss),
+	.step_reset(hss),
+	.step_in(1'b1),
+	.step_offset(16'h0),
+	.pan_offset(0),
+	.centre_offset(0),
+	.step_out(hi_step),
+	.fraction(hi_fraction),
+	.fraction_inv(hi_fraction_inv)
+);
+
+reg [FRAMING_BITS-1:0] hi_whole_d;
+wire [26:0] rgb_current;
+wire [26:0] rgb_interp;
+
+wire [7:0] hfilter_fraction = hi_fraction[hi_fracwidth-1:hi_fracwidth-8];
+wire [8:0] hfilter_fraction_inv = hi_fraction_inv[hi_fracwidth:hi_fracwidth-8];
+
+
+assign rgb_current = {red_early_osd,green_early_osd,blue_early_osd};
+wire hi_step_out;
+scandoubler_rgb_integrate rgbinterp_h1
+(
+	.clk_sys(clk),
+	.inpixel(hi_step),
+	.fraction(hfilter_fraction),
+	.fraction_inv(hfilter_fraction_inv),
+	.rgb_in(rgb_current),
+	.rgb_out(rgb_interp),
+	.outpixel(hi_step_out)
+);
+
+// Advance the output pointer 3 times every 8 clocks.
+// Disable scaling during vblank just so the idle portion of the buffer gets
+// backfilled with (near) black.
+always @(posedge clk) begin
+	if(hi_step_out)
+		sd_wrptr <= sd_wrptr+1;
+	if(hss)
+		sd_wrptr<=centre_offset;	
+	if((!hfilter_en) || (!_vsync_in))
+		sd_wrptr <= sd_lbuf_wr[FRAMING_BITS-1:1];
+end
+
+wire sd_wr_en;
+assign sd_wr_en = (hi_step_out) | (~_vsync_in) | (~hfilter_en);
+
+reg [30-1:0] hi_rgb;
+
+reg blank_d;
+reg blank_d2;
+
+always @(posedge clk) begin
+	if(hi_step_out) begin
+		hi_rgb <= {sd_lbuf_o[29:27],rgb_interp};
+		blank_d2 <= blank_in;
+		blank_d <= blank_in & blank_d2;
+	end
+end
+
+// Backfill the buffer with RGB 080808 just so the inactive area isn't black, and doesn't get
+// cropped-and-scaled away by overly-smart TVs / Monitors 
+assign hi_r = hfilter_en ? (_vsync_in & ~blank_d ? hi_rgb[26:18] : 9'h08) : {red_in[7:0]  , 1'b0};
+assign hi_g = hfilter_en ? (_vsync_in & ~blank_d ? hi_rgb[17:9] : 9'h08) : {green_in[7:0], 1'b0};
+assign hi_b = hfilter_en ? (_vsync_in & ~blank_d ? hi_rgb[8:0] : 9'h08) : {blue_in[7:0] , 1'b0};
+
+// Create linebuffer of twice the size so we can fill and ready from alternative lines.
+// (necessary because in and out are no longer in lockstep when scaling.)
+reg  [ 31-1:0] sd_lbuf [0:2048-1];      // line buffer for scan doubling (there are 908/910 hires pixels in every line)
+
+`else
+// The traditional path without Aspect ratio correction.
+
+wire sd_wr_msb = 1'b0;
+wire sd_rd_msb = 1'b0;
+
+wire osd_pixel_masked = osd_pixel;
+wire osd_blank_masked = osd_blank;
 
 // pixel data delayed by one hires pixel for horizontal interpolation
 always @ (posedge clk) begin
@@ -159,13 +344,21 @@ assign hi_r = hi_en ? ({1'b0, red_in}   + {1'b0, r_in_d}) : {red_in[7:0]  , 1'b0
 assign hi_g = hi_en ? ({1'b0, green_in} + {1'b0, g_in_d}) : {green_in[7:0], 1'b0};
 assign hi_b = hi_en ? ({1'b0, blue_in}  + {1'b0, b_in_d}) : {blue_in[7:0] , 1'b0};
 
+wire [ FRAMING_BITS:0] sd_wrptr;            // line buffer write pointer
+assign sd_wrptr = sd_lbuf_wr[FRAMING_BITS-1:1];
+wire sd_wr_en = 1'b1;
+
+reg  [ 31-1:0] sd_lbuf [0:1024-1];      // line buffer for scan doubling (there are 908/910 hires pixels in every line)
+
+wire hb_gen = sd_lbuf_o[30];
+
+`endif
 
 //// scandoubler ////
-reg  [ 31-1:0] sd_lbuf [0:1024-1];      // line buffer for scan doubling (there are 908/910 hires pixels in every line)
 reg  [ 31-1:0] sd_lbuf_o=0;             // line buffer output register
-reg  [ 31-1:0] sd_lbuf_o_d=0;           // compensantion for one clock delay of the second line buffer
-reg  [ 11-1:0] sd_lbuf_rd=0;            // line buffer read pointer
-reg  [ 11-1:0] vsync_event;
+reg  [ 31-1:0] sd_lbuf_o_d=0;           // compensation for one clock delay of the second line buffer
+reg  [ FRAMING_BITS-1:0] sd_lbuf_rd=0;            // line buffer read pointer
+reg  [ FRAMING_BITS-1:0] vsync_event;
 reg            vsync_rise;
 reg            vsync_rise_d;
 reg            vsync_fall;
@@ -183,6 +376,7 @@ always @ (posedge clk) begin
   else
     sd_lbuf_wr <= #1 sd_lbuf_wr + 11'd1;
 end
+
 
 always @ (posedge clk) begin
   if (vse) begin
@@ -222,18 +416,21 @@ end
 always @ (posedge clk) begin
   if (dblscan) begin
     // write
-    sd_lbuf[sd_lbuf_wr[10:1]] <= #1 {blank_in, _hsync_in, osd_blank, osd_pixel, hi_r, hi_g, hi_b};
+	if(sd_wr_en)
+		sd_lbuf[{sd_wr_msb,sd_wrptr[9:0]}] <= #1 {blank_in, _hsync_in, osd_blank_masked, osd_pixel_masked, hi_r, hi_g, hi_b};
     // read
-    sd_lbuf_o <= #1 sd_lbuf[sd_lbuf_rd[9:0]];
+    sd_lbuf_o <= #1 sd_lbuf[{sd_rd_msb,sd_lbuf_rd[9:0]}];
     // delayed data
     
-    sd_bbuf[sd_lbuf_rd[9:0]] <= #1 sd_lbuf_o[30];
-    sd_bbuf_o <= sd_bbuf[sd_lbuf_rd[9:0]];
-    
+    sd_bbuf[sd_lbuf_rd[FRAMING_BITS-1:0]] <= #1 hb_gen;
+    sd_bbuf_o <= sd_bbuf[sd_lbuf_rd[FRAMING_BITS-1:0]];
+
     sd_lbuf_o_d <= #1 sd_lbuf_o;
   end
 end
 
+
+wire [30-1:0] vi_rgb = sd_lbuf_o;
 
 //// vertical interpolation ////
 reg            vi_en=0;                 // vertical interpolation enable
@@ -258,15 +455,15 @@ end
 // vertical interpolation line buffer write/read
 always @ (posedge clk) begin
   // write
-  vi_lbuf[sd_lbuf_rd[9:0]] <= #1 sd_lbuf_o[29:0];
+  vi_lbuf[sd_lbuf_rd[9:0]] <= #1 vi_rgb[29:0];
   // read
   vi_lbuf_o <= #1 vi_lbuf[sd_lbuf_rd[9:0]];
 end
 
 // interpolate & mux
-assign vi_r_tmp = vi_en ? ({1'b0, sd_lbuf_o_d[26:18]} + {1'b0, vi_lbuf_o[26:18]}) : {sd_lbuf_o_d[26:18], 1'b0};
-assign vi_g_tmp = vi_en ? ({1'b0, sd_lbuf_o_d[17:09]} + {1'b0, vi_lbuf_o[17:09]}) : {sd_lbuf_o_d[17:09], 1'b0};
-assign vi_b_tmp = vi_en ? ({1'b0, sd_lbuf_o_d[ 8: 0]} + {1'b0, vi_lbuf_o[ 8: 0]}) : {sd_lbuf_o_d[ 8: 0], 1'b0};
+assign vi_r_tmp = vi_en ? ({1'b0, sd_lbuf_o_d[26:18]} + {1'b0, vi_rgb[26:18]}) : {sd_lbuf_o_d[26:18], 1'b0};
+assign vi_g_tmp = vi_en ? ({1'b0, sd_lbuf_o_d[17:09]} + {1'b0, vi_rgb[17:09]}) : {sd_lbuf_o_d[17:09], 1'b0};
+assign vi_b_tmp = vi_en ? ({1'b0, sd_lbuf_o_d[ 8: 0]} + {1'b0, vi_rgb[ 8: 0]}) : {sd_lbuf_o_d[ 8: 0], 1'b0};
 
 // cut unneeded bits
 assign vi_r = vi_r_tmp[8+2-1:2];
@@ -420,19 +617,30 @@ wire           bm_osd_blank;
 wire           bm_osd_pixel;
 
 assign selcsync     = dblscan ? 1'b0 : varbeamen ? 1'b0 : 1'b1;
-assign bm_blank     = dblscan ? ( (long_frame & ~track_vsync) ? sd_bbuf_o : sd_lbuf_o_d[30] ) : blank_in;
-assign bm_hsync     = dblscan ? sd_lbuf_o_d[29] : _hsync_in;
+
 assign bm_vsync     = (dblscan & track_vsync) ? _vsync_sd_d     : _vsync_in;
 //assign bm_hsync     = dblscan ? sd_lbuf_o_d[29] : varbeamen ? _hsync_in : ns_csync;
 //assign bm_vsync     = dblscan ? _vsync_in       : varbeamen ? _vsync_in : 1'b1;
-assign bm_r         = dblscan ? sl_r            : varbeamen ? red_in    : ns_r;
-assign bm_g         = dblscan ? sl_g            : varbeamen ? green_in  : ns_g;
-assign bm_b         = dblscan ? sl_b            : varbeamen ? blue_in   : ns_b;
 assign bm_osd_blank = dblscan ? sd_lbuf_o_d[28] : varbeamen ? osd_blank : ns_osd_blank;
 assign bm_osd_pixel = dblscan ? sd_lbuf_o_d[27] : varbeamen ? osd_pixel : ns_osd_pixel;
 assign osd_blank_out = dblscan ? sd_lbuf_o_d[28] : osd_blank;
 assign osd_pixel_out = dblscan ? sd_lbuf_o_d[27] : osd_pixel;
 
+`ifdef MINIMIG_ASPECT_CORRECTION
+
+assign bm_blank     = dblscan ? ( (long_frame & ~track_vsync) ? sd_bbuf_o : hb_gen_d ) : blank_in;
+assign bm_hsync     = dblscan ? hs_gen : _hsync_in;
+
+`else
+
+assign bm_blank     = dblscan ? ( (long_frame & ~track_vsync) ? sd_bbuf_o : sd_lbuf_o_d[30] ) : blank_in;
+assign bm_hsync     = dblscan ? sd_lbuf_o_d[29] : _hsync_in;
+
+`endif
+
+assign bm_r         = dblscan ? sl_r            : varbeamen ? red_in    : ns_r;
+assign bm_g         = dblscan ? sl_g            : varbeamen ? green_in  : ns_g;
+assign bm_b         = dblscan ? sl_b            : varbeamen ? blue_in   : ns_b;
 
 `ifdef MINIMIG_TOPLEVEL_DITHER
 `define MINIMIG_TOPLEVEL_OSD

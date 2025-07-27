@@ -1,0 +1,5 @@
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) frac_interp.v]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) scandoubler_rgb_integrate.v]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) pixel_integrate.v]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) unsigned_division.v]
+

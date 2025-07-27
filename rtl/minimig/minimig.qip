@@ -34,6 +34,7 @@ set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) ide_fif
 set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) cdda_fifo.v]
 set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) gary.v]
 set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) amber.v]
+set_global_assignment -name QIP_FILE [file join $::quartus(qip_path) scale/scale.qip]
 set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) userio.v]
 set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) userio_ps2mouse.v]
 set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) userio_osd.v]
