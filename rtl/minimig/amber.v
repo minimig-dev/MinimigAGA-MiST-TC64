@@ -383,6 +383,70 @@ reg            ns_csync;
 reg            ns_osd_blank;
 reg            ns_osd_pixel;
 
+// LUT-based scanlines - means we can calculate the light counterpart for dark pixels
+// in linear rather than device space, and could potentially upload custom curves
+// from the Amiga itself!
+
+wire [7:0] sl_r_dk;
+wire [7:0] sl_r_lt;
+wire [7:0] sl_g_dk;
+wire [7:0] sl_g_lt;
+wire [7:0] sl_b_dk;
+wire [7:0] sl_b_lt;
+
+scanlines_rom redgreenrom (
+	.clk(clk),
+	.addr_a(dither_r),
+	.q1_a(sl_r_dk),
+	.q2_a(sl_r_lt),
+	.addr_b(dither_g),
+	.q1_b(sl_g_dk),
+	.q2_b(sl_g_lt)
+);
+
+scanlines_rom bluerom (
+	.clk(clk),
+	.addr_a(dither_b),
+	.q1_a(sl_b_dk),
+	.q2_a(sl_b_lt),
+	.addr_b(0),
+	.q1_b(),
+	.q2_b()
+);
+
+
+// "balanced" scanlines - see https://www.buffee.ca/scanlines/
+// Done by averaging the bright/dark line back to the original
+// value exactly (bright=min(2v,255), dark=max(0,2v-255)), but that also
+// means bright and dark converge to the same value as v approaches 0 or
+// 255 - full saturated colors end up with no visible scanline at all.
+// m1nl (Mateusz Nalewajski) solved this by adding SL_GAP which floors
+// the bright/dark difference at full brightness, at the cost of a slight
+// (SL_GAP/2 at most) dimming of near-white highlights.
+
+localparam [  8-1:0] SL_GAP = 8'd32;
+function [  8-1:0] sl_bright;
+  input [  8-1:0] v;
+  begin
+    sl_bright = {v[6:0], 1'b0} | {8{v[7]}};
+  end
+endfunction
+function [  8-1:0] sl_dark;
+  input [  8-1:0] v;
+  reg  [  8-1:0] raw;
+  begin
+    raw = {v[6:0], 1'b1} & {8{v[7]}};
+    sl_dark = (raw > (8'd255 - SL_GAP)) ? (8'd255 - SL_GAP) : raw;
+  end
+endfunction
+
+wire [7:0] sl_r1_lt = sl_bright(dither_r[7:0]);
+wire [7:0] sl_r1_dk = sl_dark(dither_r[7:0]);
+wire [7:0] sl_g1_lt = sl_bright(dither_g[7:0]);
+wire [7:0] sl_g1_dk = sl_dark(dither_g[7:0]);
+wire [7:0] sl_b1_lt = sl_bright(dither_b[7:0]);
+wire [7:0] sl_b1_dk = sl_dark(dither_b[7:0]);
+
 // scanline enable
 always @ (posedge clk) begin
   if (hss) // reset at horizontal sync start
@@ -393,9 +457,9 @@ end
 
 // scanlines for scandoubled lines
 always @ (posedge clk) begin
-  sl_r <= #1 ((sl_en && scanline[1]) ? 8'h00 : ((sl_en && scanline[0]) ? {1'b0, dither_r[7:1]} : dither_r));
-  sl_g <= #1 ((sl_en && scanline[1]) ? 8'h00 : ((sl_en && scanline[0]) ? {1'b0, dither_g[7:1]} : dither_g));
-  sl_b <= #1 ((sl_en && scanline[1]) ? 8'h00 : ((sl_en && scanline[0]) ? {1'b0, dither_b[7:1]} : dither_b));
+	sl_r <= scanline[1] ? (sl_en ? sl_r_dk : sl_r_lt) : (scanline[0] ? (sl_en ? sl_r1_dk : sl_r1_lt) : dither_r);
+	sl_g <= scanline[1] ? (sl_en ? sl_g_dk : sl_g_lt) : (scanline[0] ? (sl_en ? sl_g1_dk : sl_g1_lt) : dither_g);
+	sl_b <= scanline[1] ? (sl_en ? sl_b_dk : sl_b_lt) : (scanline[0] ? (sl_en ? sl_b1_dk : sl_b1_lt) : dither_b);
 end
 
 // scanlines for non-scandoubled lines
